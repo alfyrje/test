@@ -46,7 +46,8 @@ export function useRegister() {
 export function useLogout() {
   return useMutation({
     mutationFn: async () => {
-      await api.post("/auth/logout");
+      const refresh = localStorage.getItem("refresh_token");
+      await api.post("/auth/logout", { refresh_token: refresh });
     },
     onSuccess: () => {
       localStorage.removeItem("access_token");
