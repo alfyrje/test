@@ -34,7 +34,7 @@ interface UpdateTodoRequest {
 
 export function useTodos(page: number = 1, size: number = 10000) {
   return useQuery({
-    queryKey: ["todos"],
+    queryKey: ["todos", page, size],
     queryFn: async (): Promise<TodoListResponse> => {
       const response = await api.get("/todos", {
         params: { page, size },
@@ -78,25 +78,32 @@ export function useUpdateTodo() {
       await queryClient.cancelQueries({ queryKey: ["todos"] });
 
       // Snapshot previous value
-      const previousTodos = queryClient.getQueryData<TodoListResponse>(["todos"]);
+      const previousQueries = queryClient.getQueriesData<TodoListResponse>({
+        queryKey: ["todos"],
+      });
 
       // Optimistically update
-      if (previousTodos) {
-        queryClient.setQueryData<TodoListResponse>(["todos"], {
-          ...previousTodos,
-          items: previousTodos.items.map((todo) =>
-            todo.id === id ? { ...todo, ...data } : todo
-          ),
+      previousQueries.forEach(([queryKey, todos]) => {
+        if (!todos) return;
+        queryClient.setQueryData<TodoListResponse>(queryKey, {
+          ...todos,
+          items: todos.items.map((todo) => (todo.id === id ? { ...todo, ...data } : todo)),
+        });
+      });
+
+      return { previousQueries };
+    },
+    onError: (_err, _vars, context) => {
+      // Rollback all queries using the snapshots
+      if (context?.previousQueries) {
+        context.previousQueries.forEach(([queryKey, todos]) => {
+          queryClient.setQueryData(queryKey, todos);
         });
       }
-
-      return { previousTodos };
-    },
-    onError: () => {
       toast.error("Failed to update todo");
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["todos"] });
+     queryClient.invalidateQueries({ queryKey: ["todos"] });
     },
   });
 }
